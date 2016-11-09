@@ -1,0 +1,73 @@
+--- nat-monitor.sh.orig	2016-11-09 08:41:35.000000000 +0800
++++ nat-monitor.sh	2016-11-09 08:41:23.000000000 +0800
+@@ -1,26 +1,33 @@
+ #!/bin/sh
+ # This script will monitor another NAT instance and take over its routes
+ # if communication with the other instance fails
+-yum -y install aws-cli
++SKIP_INIT=${SKIP_INIT:-false}
++
++if [ "$SKIP_INIT" != true ]; then
++  yum -y install aws-cli
++fi
+ 
+ # NAT instance variables
+ # Other instance's IP to ping and route to grab if other node goes down
+-NAT_ID=
+-NAT_RT_ID=
++NAT_ID=${NAT_ID:-}
++NAT_RT_ID=${NAT_RT_ID:-}
+ 
+ # My route to grab when I come back up
+-My_RT_ID=
++My_RT_ID=${My_RT_ID:-}
+ 
+ # Specify the EC2 region that this will be running in (e.g. https://ec2.us-east-1.amazonaws.com)
+-EC2_URL=
+-EC2_REGION=`echo $EC2_URL | sed "s/https:\/\/ec2\.//g" | sed "s/\.amazonaws\.com//g"`
++EC2_REGION=${EC2_REGION:-}
++if [[ "$EC2_REGION" == cn-* ]]; then
++  EC2_URL_SUFFIX=".cn"
++fi
++EC2_URL="https://ec2.${EC2_REGION}.amazonaws.com${EC2_URL_SUFFIX}"
+ 
+ # Health Check variables
+-Num_Pings=3
+-Ping_Timeout=1
+-Wait_Between_Pings=2
+-Wait_for_Instance_Stop=60
+-Wait_for_Instance_Start=300
++Num_Pings=${Num_Pings:-3}
++Ping_Timeout=${Ping_Timeout:-1}
++Wait_Between_Pings=${Wait_Between_Pings:-2}
++Wait_for_Instance_Stop=${Wait_for_Instance_Stop:-60}
++Wait_for_Instance_Start=${Wait_for_Instance_Start:-300}
+ 
+ # Run aws-apitools-common.sh to set up default environment variables and to
+ # leverage AWS security credentials provided by EC2 roles
+@@ -51,11 +58,13 @@
+ NAT_IP=`/opt/aws/bin/ec2-describe-instances $NAT_ID -U $EC2_URL | grep PRIVATEIPADDRESS -m 1 | awk '{print $2;}'`
+ 
+ echo `date` "-- Starting NAT monitor"
+-echo `date` "-- Adding this instance to $My_RT_ID default route on start"
+-/opt/aws/bin/ec2-replace-route $My_RT_ID -r 0.0.0.0/0 -i $Instance_ID -U $EC2_URL
+-# If replace-route failed, then the route might not exist and may need to be created instead
+-if [ "$?" != "0" ]; then
+-   /opt/aws/bin/ec2-create-route $My_RT_ID -r 0.0.0.0/0 -i $Instance_ID -U $EC2_URL
++if [ "$SKIP_INIT" != true ]; then
++  echo `date` "-- Adding this instance to $My_RT_ID default route on start"
++  /opt/aws/bin/ec2-replace-route $My_RT_ID -r 0.0.0.0/0 -i $Instance_ID -U $EC2_URL
++  # If replace-route failed, then the route might not exist and may need to be created instead
++  if [ "$?" != "0" ]; then
++     /opt/aws/bin/ec2-create-route $My_RT_ID -r 0.0.0.0/0 -i $Instance_ID -U $EC2_URL
++  fi
+ fi
+ 
+ while [ . ]; do
+@@ -97,4 +106,4 @@
+   else
+     sleep $Wait_Between_Pings
+   fi
+-done
+\ No newline at end of file
++done
